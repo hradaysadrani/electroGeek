@@ -65,7 +65,7 @@ To run this project locally, follow these steps:
 - MongoDB (local instance or MongoDB Atlas)
 
 ### Clone the Repository
-
+Note - To get the frontend files, refer this link -> https://github.com/hradaysadrani/electroGeekFront
 \`\`\`bash
 cd electroGeek
 git clone https://github.com/your-username/electroGeek.git

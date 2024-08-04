@@ -66,19 +66,20 @@ To run this project locally, follow these steps:
 
 ### Clone the Repository
 Note - To get the frontend files, refer this link -> https://github.com/hradaysadrani/electroGeekFront
-\`\`\`bash
+
+```bash
 cd electroGeek
 git clone https://github.com/your-username/electroGeek.git
 cd ../electroGeekFront
 git clone https://github.com/your-username/electroGeekFront.git
 
-\`\`\`
+```
 
 ### Install Dependencies
 
 For both frontend and backend:
 
-\`\`\`bash
+```bash
 # Install server dependencies
 cd electroGeek
 npm install
@@ -86,23 +87,23 @@ npm install
 # Install client dependencies
 cd ../electroGeekFront
 npm install
-\`\`\`
+```
 
 ### Set Up Environment Variables
 
 Create a `.env` file in the `backend` directory with the following variables:
 
-\`\`\`bash
+```bash
 MONGO_URI=your_mongodb_connection_string
 JWT_SECRET=your_jwt_secret
 CLOUDINARY_URL=your_cloudinary_url (Cloudinary will be added later to the project)
 NODE_ENV=development
 PORT=4000
-\`\`\`
+```
 
 ### Run the Application
 
-\`\`\`bash
+```bash
 # Start the backend server
 cd backend
 npm run dev
@@ -110,7 +111,7 @@ npm run dev
 # Start the frontend development server
 cd ../frontend
 npm start
-\`\`\`
+```
 
 Visit `http://localhost:4000` to view the app.
 

@@ -10,8 +10,8 @@ export const newUser = TryCatch(async (
     res: Response, 
     next: NextFunction
     ) => {
-        const { name, email, photo, gender, _id,dob} = req.body;
-        console.log(name, email, photo, gender, _id,dob);
+        const { name, email, photo, gender, _id, dob} = req.body;
+        console.log(name, email, photo, gender, _id, dob);
         
         let user = await User.findById(_id); 
 
@@ -21,12 +21,22 @@ export const newUser = TryCatch(async (
                 message: `Welcome, ${user.name}`,
             });
 
-        if(!_id ||!name || !email || !photo || !gender || !dob)
+        if(!_id || !name || !email || !photo)
             return next(new ErrorHandler("Please fill all required details",400));
          
-        user = await User.create({ name, email, photo, gender, _id,dob:new Date(dob),});
+        const userData: any = { 
+            name, 
+            email, 
+            photo, 
+            _id
+        };
 
-        
+        // Add optional fields only if provided
+        if(gender) userData.gender = gender;
+        if(dob) userData.dob = new Date(dob);
+
+        user = await User.create(userData);
+
         return res.status(200).json({
             success: true,
             message: `Welcome, ${user.name}`, 

@@ -7,8 +7,8 @@ interface IUser extends Document {
     email: string;
     photo: string;
     role: "admin" | "user";
-    gender: "male" | "female";
-    dob: Date;
+    gender?: "male" | "female";
+    dob?: Date;
     createdAt: Date;
     updatedAt: Date;
     // Virtual Attribute
@@ -43,11 +43,11 @@ const schema = new mongoose.Schema(
         gender: {
             type: String,
             enum: ["male", "female"],
-            required: [true, "Please enter Gender"],
+            required: false,
         },
         dob: {
             type: Date,
-            required: [true, "Please enter Date of Birth(DOB)"],
+            required: false,
         },
     },
     {
@@ -56,6 +56,8 @@ const schema = new mongoose.Schema(
 );
 
 schema.virtual("age").get(function () {
+    if (!this.dob) return null;
+    
     const today = new Date();
     const dob = this.dob;
     let age = today.getFullYear() - dob.getFullYear();

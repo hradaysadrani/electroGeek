@@ -3,10 +3,8 @@ import { TryCatch } from "../middlewares/error.js";
 import { BaseQuery, NewProductRequestBody, SearchRequestQuery } from "../types/types.js";
 import { Product } from "../models/product.js";
 import ErrorHandler from "../utils/utility-class.js";
-import { rm } from "fs";
 import { myCache } from "../app.js";
-import { stringify } from "querystring";
-import { invalidateCache } from "../utils/features.js";
+import { invalidateCache, uploadToCloudinary, deleteFromCloudinary, getPublicIdFromUrl } from "../utils/features.js";
 
 function isStringOrStringArray(value: any): value is string {
     return typeof value === 'string' || (Array.isArray(value) && value.every(item => typeof item === 'string'));
@@ -27,7 +25,6 @@ export const getLatestProducts = TryCatch(async(req: Request<{},{},NewProductReq
        products
     }); 
 });
-
 
 // Revalidate on New, Update, Delete Product & on New Order.
 export const getAllCategories = TryCatch(async(req: Request<{},{},NewProductRequestBody>,res: Response,next: NextFunction) => {
@@ -52,14 +49,13 @@ export const getAllCategories = TryCatch(async(req: Request<{},{},NewProductRequ
 export const getAdminProducts = TryCatch(async(req,res, next) => {
     let products;
 
-    // if(myCache.has("all-products")){
-    //     products = JSON.parse(myCache.get("all-products") as string);
-    // }
-    // else{
+    if(myCache.has("all-products")){
+        products = JSON.parse(myCache.get("all-products") as string);
+    }
+    else{
         products = await Product.find({});
-        // myCache.set("all-products",JSON.stringify("all-products"));
-
-    // }
+        myCache.set("all-products",JSON.stringify(products));
+    }
     
 
     return res.status(200).json({
@@ -80,11 +76,8 @@ export const getSingleProduct = TryCatch(async(req,res,next) => {
         if(!product){
             return next(new ErrorHandler("Product Not Found!",404));
         }
-        myCache.set(`product-${id}`,JSON.stringify(`product-${id}`));
-
+        myCache.set(`product-${id}`,JSON.stringify(product));
     }
-    
-    product = await Product.findById(id);
 
     return res.status(200).json({
        success: true,
@@ -98,30 +91,32 @@ export const newProduct = TryCatch(async(req: Request<{},{},NewProductRequestBod
 
     if(!photo) return next(new ErrorHandler("Please add Photo",400));
     
-    if(!name || !price || !stock || !category ) 
-       {
-           rm(photo.path, () => {
-               console.log("Deleted");
-           })
-           
-           return next(new ErrorHandler("Please enter all neccessary details!",400));
-       }
-       await Product.create({
-       name, 
-       price,
-       stock,
-       category: category.toLowerCase(),
-       photo: photo?.path,
-    });
+    if(!name || !price || !stock || !category ) {
+        return next(new ErrorHandler("Please enter all necessary details!",400));
+    }
 
-    invalidateCache({ product: true, admin: true});
+    try {
+        // Upload to Cloudinary
+        const photoUrl = await uploadToCloudinary(photo);
 
-    return res.status(201).json({
-       success: true,
-       message: "Product Created Successfully"
-    }); 
+        await Product.create({
+            name, 
+            price,
+            stock,
+            category: category.toLowerCase(),
+            photo: photoUrl,
+        });
+
+        invalidateCache({ product: true, admin: true});
+
+        return res.status(201).json({
+            success: true,
+            message: "Product Created Successfully"
+        }); 
+    } catch (error) {
+        return next(new ErrorHandler("Failed to upload image", 500));
+    }
 });
-
 
 export const updateProduct = TryCatch(async(
     req: Request<{id: string},{},NewProductRequestBody>,res: Response,next: NextFunction
@@ -132,15 +127,23 @@ export const updateProduct = TryCatch(async(
     const product = await Product.findById(id);
 
     if(!product) return next(new ErrorHandler("Product Not Found!",404));
-    // if(!photo) return next(new ErrorHandler("Please add Photo",400));
     
-    if(photo) 
-       {
-           rm(product.photo!, () => {
-               console.log("Old photo was successfully deleted!");
-           });
-           product.photo = photo.path;
-       }
+    if(photo) {
+        try {
+            // Delete old image from Cloudinary if it exists
+            if(product.photo && product.photo.includes("cloudinary")) {
+                const publicId = getPublicIdFromUrl(product.photo);
+                await deleteFromCloudinary(publicId);
+            }
+
+            // Upload new image to Cloudinary
+            const photoUrl = await uploadToCloudinary(photo);
+            product.photo = photoUrl;
+        } catch (error) {
+            return next(new ErrorHandler("Failed to upload image", 500));
+        }
+    }
+    
     if(name)
         product.name = name;
     if(price)
@@ -155,28 +158,31 @@ export const updateProduct = TryCatch(async(
 
     return res.status(200).json({
        success: true,
-       message: `Product Updated Successfully!`, // , new product details are ${product}
+       message: `Product Updated Successfully!`,
     }); 
 });
 
 export const deleteProduct = TryCatch(async(req,res,next) => {
     const product = await Product.findById(req.params.id);
-    // const photo = req.file;
 
     if(!product) return next(new ErrorHandler("Product Not Found!",404));
         
-        rm(product.photo, () => {
-            console.log("Old photo was successfully deleted!");
-        });
-            // product.photo = photo.path;
-
+    // Delete image from Cloudinary if it exists
+    if(product.photo && product.photo.includes("cloudinary")) {
+        try {
+            const publicId = getPublicIdFromUrl(product.photo);
+            await deleteFromCloudinary(publicId);
+        } catch (error) {
+            console.error("Error deleting image from Cloudinary:", error);
+        }
+    }
 
     await product.deleteOne();
     invalidateCache({ product: true, productId: String(product._id), admin: true  });
     
     return res.status(200).json({
        success: true,
-       message: `Product has been deleted successfully. These were the product details: ${product}`,
+       message: `Product has been deleted successfully.`,
     }); 
 });
 
@@ -190,14 +196,10 @@ export const getAllProducts = TryCatch(
         const skip = limit*(page - 1);
         
         const baseQuery:BaseQuery = {};
-        // price: {
-        //     $lte: Number(price), // Less than or equal to
-        // },
-        // category
 
         if (typeof search === 'string' || Array.isArray(search)) {
             baseQuery.name = {
-                $regex: Array.isArray(search) ? search.join('|') : search, // Handle string[] by joining with '|'
+                $regex: Array.isArray(search) ? search.join('|') : search,
                 $options: "i", // To make regex case insensitive
             };
         }
@@ -219,7 +221,7 @@ export const getAllProducts = TryCatch(
                 Product.find(baseQuery),
             ]);
         
-        const totalPage = Math.ceil(filteredOnlyProduct.    length/limit);
+        const totalPage = Math.ceil(filteredOnlyProduct.length/limit);
 
     return res.status(200).json({
        success: true,

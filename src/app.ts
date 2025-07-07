@@ -9,7 +9,7 @@ import orderRoute from './routes/order.js';
 import paymentRoute from './routes/payment.js';
 import dashboardRoute from './routes/stats.js';
 
-import { connectDB } from './utils/features.js';
+import { connectDB, configureCloudinary } from './utils/features.js';
 import { errorMiddleware } from "./middlewares/error.js";
 import Stripe from "stripe";
 import cors from "cors";
@@ -21,7 +21,11 @@ config({
 const port =  process.env.PORT || 4000;
 const mongoURI = process.env.MONGO_URI || "";
 const stripeKey = process.env.STRIPE_KEY || "";
+
+// Initialize connections
 connectDB(mongoURI);
+configureCloudinary();
+
 const app = express();
 
 export const stripe = new Stripe(stripeKey);
